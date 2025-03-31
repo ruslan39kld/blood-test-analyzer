@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+
+{% block title %}Blood Test Result #{{ blood_test.id }}{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>Blood Test Result</h1>
+            <a href="{{ url_for('results') }}" class="btn btn-secondary">Back to Results</a>
+        </div>
+        
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white">
+                <h3 class="mb-0">Test Information</h3>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4">
+                        <p><strong>Test ID:</strong> {{ blood_test.id }}</p>
+                    </div>
+                    <div class="col-md-4">
+                        <p><strong>Study Date:</strong> {{ blood_test.study_date.strftime('%d.%m.%Y') if blood_test.study_date else 'Unknown' }}</p>
+                    </div>
+                    <div class="col-md-4">
+                        <p><strong>Created:</strong> {{ blood_test.created_at.strftime('%d.%m.%Y %H:%M') }}</p>
+                    </div>
+                </div>
+                <p><strong>Original File:</strong> {{ blood_test.filename }}</p>
+            </div>
+        </div>
+        
+        {% if biomarkers %}
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h3 class="mb-0">Biomarkers</h3>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Biomarker</th>
+                                    <th>Value</th>
+                                    <th>Unit</th>
+                                    <th>Reference Range</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for biomarker in biomarkers %}
+                                    <tr>
+                                        <td>{{ biomarker.name|title }}</td>
+                                        <td>{{ biomarker.value }}</td>
+                                        <td>{{ biomarker.unit }}</td>
+                                        <td>
+                                            {% if biomarker.reference_range_min is not none and biomarker.reference_range_max is not none %}
+                                                {{ biomarker.reference_range_min }} - {{ biomarker.reference_range_max }}
+                                            {% else %}
+                                                -
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if biomarker.reference_range_min is not none and biomarker.reference_range_max is not none %}
+                                                {% if biomarker.value < biomarker.reference_range_min %}
+                                                    <span class="badge bg-warning">Low</span>
+                                                {% elif biomarker.value > biomarker.reference_range_max %}
+                                                    <span class="badge bg-danger">High</span>
+                                                {% else %}
+                                                    <span class="badge bg-success">Normal</span>
+                                                {% endif %}
+                                            {% else %}
+                                                <span class="badge bg-secondary">Unknown</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card mt-4">
+                <div class="card-header bg-info text-white">
+                    <h3 class="mb-0">Visualization</h3>
+                </div>
+                <div class="card-body">
+                    <canvas id="biomarkersChart" width="400" height="200"></canvas>
+                </div>
+            </div>
+        {% else %}
+            <div class="alert alert-warning">
+                <p>No biomarkers found for this test.</p>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{% if biomarkers %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const ctx = document.getElementById('biomarkersChart').getContext('2d');
+        
+        // Prepare data for chart
+        const biomarkerNames = [];
+        const biomarkerValues = [];
+        const biomarkerColors = [];
+        
+        {% for biomarker in biomarkers %}
+            biomarkerNames.push('{{ biomarker.name|title }}');
+            biomarkerValues.push({{ biomarker.value }});
+            
+            {% if biomarker.reference_range_min is not none and biomarker.reference_range_max is not none %}
+                {% if biomarker.value < biomarker.reference_range_min %}
+                    biomarkerColors.push('rgba(255, 193, 7, 0.8)'); // warning color
+                {% elif biomarker.value > biomarker.reference_range_max %}
+                    biomarkerColors.push('rgba(220, 53, 69, 0.8)'); // danger color
+                {% else %}
+                    biomarkerColors.push('rgba(40, 167, 69, 0.8)'); // success color
+                {% endif %}
+            {% else %}
+                biomarkerColors.push('rgba(108, 117, 125, 0.8)'); // secondary color
+            {% endif %}
+        {% endfor %}
+        
+        // Create chart
+        const biomarkersChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: biomarkerNames,
+                datasets: [{
+                    label: 'Biomarker Values',
+                    data: biomarkerValues,
+                    backgroundColor: biomarkerColors,
+                    borderColor: biomarkerColors.map(color => color.replace('0.8', '1')),
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Value'
+                        }
+                    },
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Biomarker'
+                        }
+                    }
+                }
+            }
+        });
+    });
+</script>
+{% endif %}
+{% endblock %}

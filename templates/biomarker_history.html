@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+
+{% block title %}{{ biomarker_name|capitalize }} History{% endblock %}
+
+{% block extra_css %}
+<style>
+    .chart-container {
+        height: 400px;
+        margin-bottom: 2rem;
+    }
+    
+    .abnormal-value {
+        color: #dc3545;
+        font-weight: bold;
+    }
+    
+    .normal-value {
+        color: #198754;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>{{ biomarker_name|capitalize }} History</h1>
+            <a href="{{ url_for('results') }}" class="btn btn-outline-secondary">Back to Results</a>
+        </div>
+        
+        <div class="card mb-4">
+            <div class="card-header bg-light">
+                <h5 class="mb-0">Patient Information</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <p><strong>Patient:</strong> {{ patient_surname or 'Unknown' }}</p>
+                    </div>
+                    <div class="col-md-6">
+                        <p><strong>Medical Number:</strong> {{ patient_number or 'N/A' }}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        {% if history %}
+            <div class="card mb-4">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">Dynamics Chart</h5>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="biomarkerChart"></canvas>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">History Data</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Value</th>
+                                    <th>Unit</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for date, value, unit, is_abnormal in history %}
+                                    <tr>
+                                        <td>{{ date.strftime('%d.%m.%Y') if date else 'Unknown' }}</td>
+                                        <td class="{% if is_abnormal %}abnormal-value{% else %}normal-value{% endif %}">
+                                            {{ value }}
+                                        </td>
+                                        <td>{{ unit or '-' }}</td>
+                                        <td>
+                                            {% if is_abnormal %}
+                                                <span class="badge bg-danger">Abnormal</span>
+                                            {% else %}
+                                                <span class="badge bg-success">Normal</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        {% else %}
+            <div class="alert alert-info">
+                No history data found for {{ biomarker_name|capitalize }}.
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{% if history %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const ctx = document.getElementById('biomarkerChart').getContext('2d');
+        
+        // Prepare data for chart
+        const dates = [
+            {% for date, value, unit, is_abnormal in history %}
+                '{{ date.strftime('%d.%m.%Y') if date else 'Unknown' }}',
+            {% endfor %}
+        ];
+        
+        const values = [
+            {% for date, value, unit, is_abnormal in history %}
+                {{ value }},
+            {% endfor %}
+        ];
+        
+        const abnormalStatus = [
+            {% for date, value, unit, is_abnormal in history %}
+                {{ 'true' if is_abnormal else 'false' }},
+            {% endfor %}
+        ];
+        
+        // Create the chart
+        const biomarkerChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: dates,
+                datasets: [{
+                    label: '{{ biomarker_name|capitalize }} ({{ history[0][2] or 'No unit' }})',
+                    data: values,
+                    borderColor: 'rgba(54, 162, 235, 1)',
+                    backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                    borderWidth: 2,
+                    tension: 0.1,
+                    pointBackgroundColor: abnormalStatus.map(isAbnormal => 
+                        isAbnormal ? 'rgba(255, 99, 132, 1)' : 'rgba(75, 192, 192, 1)'
+                    ),
+                    pointBorderColor: abnormalStatus.map(isAbnormal => 
+                        isAbnormal ? 'rgba(255, 99, 132, 1)' : 'rgba(75, 192, 192, 1)'
+                    ),
+                    pointRadius: 6
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: false
+                    }
+                },
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const dataIndex = context.dataIndex;
+                                const value = context.raw;
+                                const status = abnormalStatus[dataIndex] ? 'Abnormal' : 'Normal';
+                                return `Value: ${value} (${status})`;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    });
+</script>
+{% endif %}
+{% endblock %}
